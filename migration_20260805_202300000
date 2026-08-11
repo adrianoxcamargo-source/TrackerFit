@@ -1,0 +1,53 @@
+create or replace function public.request_trainer_access(target_email text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_id uuid;
+  caller_id uuid := auth.uid();
+  created_id uuid;
+begin
+  if caller_id is null then
+    raise exception 'Usuário não autenticado';
+  end if;
+
+  if not exists (
+    select 1 from public.profiles
+    where id = caller_id and role = 'treinador'
+  ) then
+    raise exception 'Apenas treinadores podem solicitar acesso';
+  end if;
+
+  select id into target_id
+  from public.profiles
+  where lower(email) = lower(trim(target_email))
+    and role = 'atleta'
+  limit 1;
+
+  if target_id is null then
+    raise exception 'Atleta não encontrado com este e-mail';
+  end if;
+
+  if target_id = caller_id then
+    raise exception 'O treinador não pode solicitar acesso à própria conta';
+  end if;
+
+  insert into public.athlete_trainer_links (
+    athlete_id, trainer_id, invite_email, status
+  ) values (
+    target_id, caller_id, lower(trim(target_email)), 'pendente'
+  )
+  on conflict (athlete_id, invite_email) do update set
+    trainer_id = excluded.trainer_id,
+    status = 'pendente';
+
+  select id into created_id
+  from public.athlete_trainer_links
+  where athlete_id = target_id
+    and invite_email = lower(trim(target_email));
+
+  return created_id;
+end;
+$$;

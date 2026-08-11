@@ -1,0 +1,4 @@
+-- Support the real program data: per-exercise knee-safety note, and RIR "N/A" for time/rep-only sets.
+alter table public.exercises add column if not exists knee_note text;
+alter table public.workout_exercises alter column rir_target drop not null;
+alter table public.workout_exercises alter column rir_target drop default;
