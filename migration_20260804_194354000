@@ -1,2 +1,0 @@
-alter table public.athlete_trainer_links drop constraint if exists athlete_trainer_links_status_check;
-alter table public.athlete_trainer_links add constraint athlete_trainer_links_status_check check (status in ('pendente','aceito','recusado'));
