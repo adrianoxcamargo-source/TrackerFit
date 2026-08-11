@@ -1,0 +1,9 @@
+update workout_exercises we
+set rest_seconds = case
+  when e.category in ('Composto', 'Composto Guiado') then 150
+  when e.category in ('Isolador', 'Isolador Guiado') then 90
+  else 45
+end
+from exercises e
+where e.id = we.exercise_id
+  and we.rest_seconds is null;

@@ -1,0 +1,129 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Grafite fitness base */
+    --background: 222 20% 7%;
+    --foreground: 210 20% 96%;
+
+    --card: 222 18% 10%;
+    --card-foreground: 210 20% 96%;
+
+    --popover: 222 18% 10%;
+    --popover-foreground: 210 20% 96%;
+
+    /* Progression accent — vibrant green (positive progression) */
+    --primary: 146 70% 42%;
+    --primary-foreground: 222 30% 8%;
+
+    --secondary: 222 16% 14%;
+    --secondary-foreground: 210 20% 96%;
+
+    --muted: 222 16% 16%;
+    --muted-foreground: 215 16% 60%;
+
+    --accent: 222 16% 16%;
+    --accent-foreground: 210 20% 96%;
+
+    /* Knee safety alert — amber, reserved exclusively for safety warnings */
+    --alert: 38 95% 52%;
+    --alert-foreground: 28 60% 12%;
+
+    --destructive: 0 72% 52%;
+    --destructive-foreground: 210 20% 98%;
+
+    --border: 222 16% 19%;
+    --input: 222 16% 15%;
+    --ring: 146 70% 42%;
+
+    --radius: 0.75rem;
+
+    /* Chart palette */
+    --chart-1: 146 70% 45%;
+    --chart-2: 190 75% 45%;
+    --chart-3: 38 95% 55%;
+    --chart-4: 265 70% 65%;
+
+    /* Sidebar */
+    --sidebar-background: 222 24% 5%;
+    --sidebar-foreground: 210 16% 76%;
+    --sidebar-primary: 146 70% 42%;
+    --sidebar-primary-foreground: 222 30% 8%;
+    --sidebar-accent: 222 16% 13%;
+    --sidebar-accent-foreground: 210 20% 96%;
+    --sidebar-border: 222 16% 14%;
+    --sidebar-ring: 146 70% 42%;
+
+    /* Effects */
+    --gradient-primary: linear-gradient(135deg, hsl(146 70% 42%), hsl(168 72% 40%));
+    --gradient-surface: linear-gradient(180deg, hsl(222 18% 10%), hsl(222 22% 7%));
+    --shadow-glow: 0 0 40px hsl(146 70% 42% / 0.25);
+    --shadow-card: 0 12px 36px -14px hsl(222 40% 2% / 0.7);
+  }
+
+  .dark {
+    --background: 222 20% 7%;
+    --foreground: 210 20% 96%;
+    --card: 222 18% 10%;
+    --card-foreground: 210 20% 96%;
+    --popover: 222 18% 10%;
+    --popover-foreground: 210 20% 96%;
+    --primary: 146 70% 42%;
+    --primary-foreground: 222 30% 8%;
+    --secondary: 222 16% 14%;
+    --secondary-foreground: 210 20% 96%;
+    --muted: 222 16% 16%;
+    --muted-foreground: 215 16% 60%;
+    --accent: 222 16% 16%;
+    --accent-foreground: 210 20% 96%;
+    --alert: 38 95% 52%;
+    --alert-foreground: 28 60% 12%;
+    --destructive: 0 72% 52%;
+    --destructive-foreground: 210 20% 98%;
+    --border: 222 16% 19%;
+    --input: 222 16% 15%;
+    --ring: 146 70% 42%;
+    --chart-1: 146 70% 45%;
+    --chart-2: 190 75% 45%;
+    --chart-3: 38 95% 55%;
+    --chart-4: 265 70% 65%;
+    --sidebar-background: 222 24% 5%;
+    --sidebar-foreground: 210 16% 76%;
+    --sidebar-primary: 146 70% 42%;
+    --sidebar-primary-foreground: 222 30% 8%;
+    --sidebar-accent: 222 16% 13%;
+    --sidebar-accent-foreground: 210 20% 96%;
+    --sidebar-border: 222 16% 14%;
+    --sidebar-ring: 146 70% 42%;
+    --gradient-primary: linear-gradient(135deg, hsl(146 70% 42%), hsl(168 72% 40%));
+    --gradient-surface: linear-gradient(180deg, hsl(222 18% 10%), hsl(222 22% 7%));
+    --shadow-glow: 0 0 40px hsl(146 70% 42% / 0.25);
+    --shadow-card: 0 12px 36px -14px hsl(222 40% 2% / 0.7);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    background-image: radial-gradient(
+        1200px 600px at 100% -10%,
+        hsl(146 70% 42% / 0.08),
+        transparent
+      ),
+      radial-gradient(900px 500px at -10% 110%, hsl(190 75% 45% / 0.06), transparent);
+    background-attachment: fixed;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+}
