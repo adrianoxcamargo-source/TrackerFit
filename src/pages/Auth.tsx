@@ -121,7 +121,17 @@ export default function Auth() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="li-pass">Senha</Label>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="li-pass">Senha</Label>
+                      <Button
+                        type="button"
+                        variant="link"
+                        className="h-auto p-0 text-xs"
+                        onClick={() => navigate("/forgot-password")}
+                      >
+                        Esqueci minha senha
+                      </Button>
+                    </div>
                     <Input
                       id="li-pass"
                       type="password"

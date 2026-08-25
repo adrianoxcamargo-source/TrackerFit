@@ -129,7 +129,7 @@ function Splash() {
 
 export function AppShell() {
   const location = useLocation();
-  const { session, profile, loading: authLoading } = useAuth();
+  const { session, profile, loading: authLoading, passwordRecovery } = useAuth();
   const {
     isTrainer,
     linkedAthletes,
@@ -141,6 +141,7 @@ export function AppShell() {
   const { settings } = useSettings();
   const { hasProgram, loading: programLoading } = useHasProgram();
 
+  if (passwordRecovery) return <Navigate to="/reset-password" replace />;
   if (authLoading || (session && !profile) || athleteLoading) return <Splash />;
   if (!session) return <Navigate to="/auth" replace />;
   if (programLoading) return <Splash />;
