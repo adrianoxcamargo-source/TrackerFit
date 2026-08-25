@@ -18,6 +18,7 @@ interface AuthContextValue {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  passwordRecovery: boolean;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
   signUp: (data: {
     email: string;
@@ -25,6 +26,9 @@ interface AuthContextValue {
     fullName: string;
     role: "atleta" | "treinador";
   }) => Promise<{ error?: string }>;
+  requestPasswordReset: (email: string) => Promise<{ error?: string }>;
+  updatePassword: (password: string) => Promise<{ error?: string }>;
+  clearPasswordRecovery: () => void;
   signOut: () => Promise<void>;
 }
 
@@ -35,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
 
   const loadProfile = useCallback(async (uid: string) => {
     const { data } = await supabase
@@ -48,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Register the listener BEFORE checking for an existing session.
     const { data: sub } = supabase.auth.onAuthStateChange((event, sess) => {
+      if (event === "PASSWORD_RECOVERY") setPasswordRecovery(true);
       setSession(sess);
       setUser(sess?.user ?? null);
       if (sess?.user) {
@@ -108,9 +114,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null);
   }, []);
 
+  const requestPasswordReset = useCallback(async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin,
+    });
+    return { error: error?.message };
+  }, []);
+
+  const updatePassword = useCallback(async (password: string) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (!error) setPasswordRecovery(false);
+    return { error: error?.message };
+  }, []);
+
+  const clearPasswordRecovery = useCallback(() => {
+    setPasswordRecovery(false);
+  }, []);
+
   return (
     <AuthContext.Provider
-      value={{ session, user, profile, loading, signIn, signUp, signOut }}
+      value={{
+        session,
+        user,
+        profile,
+        loading,
+        passwordRecovery,
+        signIn,
+        signUp,
+        requestPasswordReset,
+        updatePassword,
+        clearPasswordRecovery,
+        signOut,
+      }}
     >
       {children}
     </AuthContext.Provider>

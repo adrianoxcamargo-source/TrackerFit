@@ -1,5 +1,7 @@
 import { AppShell } from "@/components/app-shell";
 import Auth from "@/pages/Auth";
+import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
 import Cardio from "@/pages/Cardio";
 import Config from "@/pages/Config";
 import Dashboard from "@/pages/Dashboard";
@@ -14,6 +16,8 @@ import Metricas from "@/pages/Metricas";
 
 export const routers = [
   { path: "/auth", name: "auth", element: <Auth /> },
+  { path: "/forgot-password", name: "forgot-password", element: <ForgotPassword /> },
+  { path: "/reset-password", name: "reset-password", element: <ResetPassword /> },
   { path: "/onboarding", name: "onboarding", element: <Onboarding /> },
   {
     path: "/",
