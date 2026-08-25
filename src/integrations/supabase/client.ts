@@ -2,8 +2,11 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-export const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// TrackerFit-specific names prevent stale generic Vercel variables from
+// overriding the credentials that belong to this Supabase project.
+export const SUPABASE_URL = import.meta.env.VITE_TRACKERFIT_SUPABASE_URL;
+export const SUPABASE_PUBLISHABLE_KEY =
+  import.meta.env.VITE_TRACKERFIT_SUPABASE_ANON_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
   throw new Error("Supabase environment variables are not configured.");
