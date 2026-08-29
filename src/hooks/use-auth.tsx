@@ -25,10 +25,13 @@ interface AuthContextValue {
     password: string;
     fullName: string;
     role: "atleta" | "treinador";
+    biologicalSex?: "masculino" | "feminino";
+    birthDate?: string;
   }) => Promise<{ error?: string }>;
   requestPasswordReset: (email: string) => Promise<{ error?: string }>;
   updatePassword: (password: string) => Promise<{ error?: string }>;
   clearPasswordRecovery: () => void;
+  refreshProfile: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -44,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadProfile = useCallback(async (uid: string) => {
     const { data } = await supabase
       .from("profiles")
-      .select("id,email,full_name,role")
+      .select("id,email,full_name,role,biological_sex,birth_date")
       .eq("id", uid)
       .maybeSingle();
     setProfile(data ? mapProfile(data) : null);
@@ -86,13 +89,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password: string;
       fullName: string;
       role: "atleta" | "treinador";
+      biologicalSex?: "masculino" | "feminino";
+      birthDate?: string;
     }) => {
       const { data: result, error } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
         options: {
           emailRedirectTo: `${window.location.origin}/`,
-          data: { full_name: data.fullName, role: data.role },
+          data: { full_name: data.fullName, role: data.role, biological_sex: data.biologicalSex, birth_date: data.birthDate },
         },
       });
       if (error) return { error: error.message };
@@ -131,6 +136,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPasswordRecovery(false);
   }, []);
 
+  const refreshProfile = useCallback(async () => {
+    if (user) await loadProfile(user.id);
+  }, [loadProfile, user]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -144,6 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         requestPasswordReset,
         updatePassword,
         clearPasswordRecovery,
+        refreshProfile,
         signOut,
       }}
     >

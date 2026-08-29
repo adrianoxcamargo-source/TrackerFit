@@ -52,7 +52,7 @@ export function ActiveAthleteProvider({ children }: { children: ReactNode }) {
     }
     const { data: profs } = await supabase
       .from("profiles")
-      .select("id,email,full_name,role")
+      .select("id,email,full_name,role,biological_sex,birth_date")
       .in("id", ids);
     setLinkedAthletes((profs ?? []).map(mapProfile));
   }, []);
