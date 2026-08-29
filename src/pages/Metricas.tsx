@@ -1,5 +1,5 @@
-import { Activity, Plus, Ruler, Scale, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Activity, Download, Plus, Ruler, Scale, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/page-header";
 import { Textarea } from "@/components/ui/textarea";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { useActiveAthlete } from "@/hooks/use-active-athlete";
+import { downloadAssessmentPdf } from "@/lib/assessment-pdf";
 import { formatKg, formatNumber, formatPct, formatShortDate, todayISO } from "@/lib/format";
 import { useBodyMetrics, useSettings } from "@/lib/store";
 import type { BodyMetric } from "@/lib/types";
@@ -81,10 +84,42 @@ function EvolutionChart({ data, config, lines, emptyText }: {
 }
 
 export default function Metricas() {
+  const { activeAthleteId, activeAthleteProfile } = useActiveAthlete();
   const { settings } = useSettings();
   const { items, add, remove } = useBodyMetrics();
   const [date, setDate] = useState(todayISO());
   const [values, setValues] = useState<FormValues>({ heightCm: "175" });
+  const [draftLoadedFor, setDraftLoadedFor] = useState<string | null>(null);
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<BodyMetric | null>(null);
+  const draftKey = activeAthleteId ? `tf:body-assessment-draft:${activeAthleteId}` : null;
+
+  useEffect(() => {
+    if (!draftKey || !activeAthleteId) return;
+    try {
+      const stored = localStorage.getItem(draftKey);
+      if (stored) {
+        const draft = JSON.parse(stored) as { date?: string; values?: FormValues; savedAt?: string };
+        if (draft.date) setDate(draft.date);
+        if (draft.values) setValues(draft.values);
+        setDraftSavedAt(draft.savedAt ?? null);
+      } else {
+        setDate(todayISO());
+        setValues({ heightCm: "175" });
+        setDraftSavedAt(null);
+      }
+    } catch {
+      localStorage.removeItem(draftKey);
+    }
+    setDraftLoadedFor(activeAthleteId);
+  }, [activeAthleteId, draftKey]);
+
+  useEffect(() => {
+    if (!draftKey || !activeAthleteId || draftLoadedFor !== activeAthleteId) return;
+    const savedAt = new Date().toISOString();
+    localStorage.setItem(draftKey, JSON.stringify({ date, values, savedAt }));
+    setDraftSavedAt(savedAt);
+  }, [activeAthleteId, date, draftKey, draftLoadedFor, values]);
   const sorted = useMemo(() => [...items].sort((a, b) => a.recordedAt.localeCompare(b.recordedAt)), [items]);
   const first = sorted[0];
   const latest = sorted[sorted.length - 1];
@@ -116,12 +151,16 @@ export default function Metricas() {
     const saved = await add(payload);
     if (!saved) return;
     setValues({ heightCm: "175" });
+    setDate(todayISO());
+    if (draftKey) localStorage.removeItem(draftKey);
+    setDraftSavedAt(null);
     toast.success("Avaliação física registrada.");
   };
-  const confirmRemove = async (metric: BodyMetric) => {
-    if (!window.confirm(`Excluir a avaliação de ${formatShortDate(metric.recordedAt)}?`)) return;
-    await remove(metric.id);
-    toast.success("Avaliação excluída.");
+  const confirmRemove = async () => {
+    if (!pendingDelete) return;
+    const removed = await remove(pendingDelete.id);
+    if (removed !== false) toast.success("Avaliação excluída.");
+    setPendingDelete(null);
   };
   if (!settings) return null;
   const weightChange = first && latest ? latest.weightKg - first.weightKg : 0;
@@ -144,7 +183,7 @@ export default function Metricas() {
       <Card className="shadow-card"><CardHeader><CardTitle className="text-base">Percentual de gordura</CardTitle><CardDescription>Dobras cutâneas e bioimpedância são exibidas separadamente.</CardDescription></CardHeader><CardContent><EvolutionChart data={fatData} config={fatConfig} emptyText="São necessárias duas avaliações com percentual de gordura." lines={[{ key: "folds", color: "hsl(var(--chart-2))" }, { key: "bio", color: "hsl(var(--chart-3))" }]} /></CardContent></Card>
       <Card className="shadow-card xl:col-span-2"><CardHeader><CardTitle className="text-base">Circunferências do tronco</CardTitle><CardDescription>Peitoral, cintura, abdômen e quadril em centímetros.</CardDescription></CardHeader><CardContent><EvolutionChart data={circumferenceData} config={circumferenceConfig} emptyText="São necessárias duas avaliações com circunferências." lines={[{ key: "waist", color: "hsl(var(--chart-1))" }, { key: "abdomen", color: "hsl(var(--chart-2))" }, { key: "hip", color: "hsl(var(--chart-3))" }, { key: "chest", color: "hsl(var(--chart-4))" }]} /></CardContent></Card>
     </div>
-    <Card className="shadow-card"><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Plus className="h-4 w-4" />Nova avaliação</CardTitle><CardDescription>Campos não medidos podem ficar em branco. Massa magra e gordura são calculadas automaticamente quando possível.</CardDescription></CardHeader><CardContent>
+    <Card className="shadow-card"><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Plus className="h-4 w-4" />Nova avaliação</CardTitle><CardDescription>Campos não medidos podem ficar em branco. Massa magra e gordura são calculadas automaticamente quando possível. O preenchimento fica salvo neste aparelho até o registro definitivo.</CardDescription>{draftSavedAt && <p className="text-xs text-emerald-600">Rascunho salvo automaticamente às {new Date(draftSavedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.</p>}</CardHeader><CardContent>
       <form onSubmit={handleAdd} className="space-y-5">
         <div className="grid gap-3 sm:grid-cols-3"><div className="space-y-1"><Label className="text-[10px] uppercase text-muted-foreground">Data</Label><DateField value={date} onChange={setDate} max={todayISO()} /></div><MetricInput field="heightCm" label="Altura" unit="cm" value={values.heightCm} onChange={setField} /><MetricInput field="weightKg" label="Peso" unit="kg" value={values.weightKg} onChange={setField} required /></div>
         <details open className="rounded-lg border p-4"><summary className="cursor-pointer font-medium">Composição corporal</summary><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{compositionFields.filter(([key]) => key !== "weightKg").map(([key, label, unit]) => <MetricInput key={key} field={key} label={label} unit={unit} value={values[key]} onChange={setField} />)}</div></details>
@@ -155,7 +194,10 @@ export default function Metricas() {
       </form>
     </CardContent></Card>
     <Card className="shadow-card"><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Ruler className="h-4 w-4" />Histórico de avaliações</CardTitle><CardDescription>{sorted.length} avaliações registradas.</CardDescription></CardHeader><CardContent>
-      {sorted.length === 0 ? <EmptyState icon={Scale} title="Nenhuma avaliação" description="Cadastre a primeira avaliação física." /> : <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-sm"><thead><tr className="border-b text-left text-xs uppercase text-muted-foreground"><th className="py-3">Data</th><th>Peso</th><th>Gordura</th><th>Bio</th><th>Massa magra</th><th>Cintura</th><th>Abdômen</th><th className="text-right">Ações</th></tr></thead><tbody>{[...sorted].reverse().map((m) => <tr key={m.id} className="border-b last:border-0"><td className="py-3 font-medium">{formatShortDate(m.recordedAt)}</td><td>{formatKg(m.weightKg)}</td><td>{m.bodyfatPct == null ? "—" : formatPct(m.bodyfatPct)}</td><td>{m.bioimpedanceBodyfatPct == null ? "—" : formatPct(m.bioimpedanceBodyfatPct)}</td><td>{m.leanMassKg == null ? "—" : formatKg(m.leanMassKg)}</td><td>{m.waistCm == null ? "—" : `${formatNumber(m.waistCm)} cm`}</td><td>{m.abdomenCm == null ? "—" : `${formatNumber(m.abdomenCm)} cm`}</td><td className="text-right"><Button type="button" variant="ghost" size="icon" aria-label="Excluir avaliação" onClick={() => confirmRemove(m)}><Trash2 className="h-4 w-4 text-destructive" /></Button></td></tr>)}</tbody></table></div>}
+      {sorted.length === 0 ? <EmptyState icon={Scale} title="Nenhuma avaliação" description="Cadastre a primeira avaliação física." /> : <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-sm"><thead><tr className="border-b text-left text-xs uppercase text-muted-foreground"><th className="py-3">Data</th><th>Peso</th><th>Gordura</th><th>Bio</th><th>Massa magra</th><th>Cintura</th><th>Abdômen</th><th className="text-right">Ações</th></tr></thead><tbody>{[...sorted].reverse().map((m) => <tr key={m.id} className="border-b last:border-0"><td className="py-3 font-medium">{formatShortDate(m.recordedAt)}</td><td>{formatKg(m.weightKg)}</td><td>{m.bodyfatPct == null ? "—" : formatPct(m.bodyfatPct)}</td><td>{m.bioimpedanceBodyfatPct == null ? "—" : formatPct(m.bioimpedanceBodyfatPct)}</td><td>{m.leanMassKg == null ? "—" : formatKg(m.leanMassKg)}</td><td>{m.waistCm == null ? "—" : `${formatNumber(m.waistCm)} cm`}</td><td>{m.abdomenCm == null ? "—" : `${formatNumber(m.abdomenCm)} cm`}</td><td className="text-right"><Button type="button" variant="ghost" size="icon" aria-label="Baixar avaliação em PDF" onClick={() => downloadAssessmentPdf(m, activeAthleteProfile?.full_name || activeAthleteProfile?.email || "Atleta")}><Download className="h-4 w-4" /></Button><Button type="button" variant="ghost" size="icon" aria-label="Excluir avaliação" onClick={() => setPendingDelete(m)}><Trash2 className="h-4 w-4 text-destructive" /></Button></td></tr>)}</tbody></table></div>}
     </CardContent></Card>
+    <AlertDialog open={!!pendingDelete} onOpenChange={(open) => { if (!open) setPendingDelete(null); }}>
+      <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Excluir esta avaliação?</AlertDialogTitle><AlertDialogDescription>A avaliação de {pendingDelete ? formatShortDate(pendingDelete.recordedAt) : ""} será apagada permanentemente. Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => void confirmRemove()}>Excluir avaliação</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+    </AlertDialog>
   </>;
 }
