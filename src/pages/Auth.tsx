@@ -15,6 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DateField } from "@/components/date-field";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type Role = "atleta" | "treinador";
 
@@ -30,6 +32,8 @@ export default function Auth() {
   const [suEmail, setSuEmail] = useState("");
   const [suPassword, setSuPassword] = useState("");
   const [suRole, setSuRole] = useState<Role>("atleta");
+  const [suSex, setSuSex] = useState<"masculino" | "feminino" | "">("");
+  const [suBirthDate, setSuBirthDate] = useState("");
   const [suLoading, setSuLoading] = useState(false);
 
   if (session) return <Navigate to="/" replace />;
@@ -64,12 +68,18 @@ export default function Auth() {
       toast.error("A senha precisa ter ao menos 6 caracteres.");
       return;
     }
+    if (suRole === "atleta" && (!suSex || !suBirthDate)) {
+      toast.error("Informe sexo biológico e data de nascimento.");
+      return;
+    }
     setSuLoading(true);
     const { error } = await signUp({
       email: suEmail,
       password: suPassword,
       fullName: suName,
       role: suRole,
+      biologicalSex: suRole === "atleta" ? suSex || undefined : undefined,
+      birthDate: suRole === "atleta" ? suBirthDate : undefined,
     });
     setSuLoading(false);
     if (error) {
@@ -214,6 +224,12 @@ export default function Auth() {
                         : "Treinador vê/edita o plano dos atletas vinculados."}
                     </p>
                   </div>
+                  {suRole === "atleta" && (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="space-y-1.5"><Label>Sexo biológico</Label><Select value={suSex} onValueChange={(value) => setSuSex(value as "masculino" | "feminino")}><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger><SelectContent><SelectItem value="masculino">Masculino</SelectItem><SelectItem value="feminino">Feminino</SelectItem></SelectContent></Select></div>
+                      <div className="space-y-1.5"><Label>Data de nascimento</Label><DateField value={suBirthDate} onChange={setSuBirthDate} max={new Date().toISOString().slice(0, 10)} /></div>
+                    </div>
+                  )}
                   <Button
                     type="submit"
                     disabled={suLoading}

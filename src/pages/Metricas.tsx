@@ -1,4 +1,4 @@
-import { Activity, Download, Plus, Ruler, Scale, Trash2 } from "lucide-react";
+import { Activity, Download, Pencil, Plus, Ruler, Scale, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
@@ -86,12 +86,13 @@ function EvolutionChart({ data, config, lines, emptyText }: {
 export default function Metricas() {
   const { activeAthleteId, activeAthleteProfile } = useActiveAthlete();
   const { settings } = useSettings();
-  const { items, add, remove } = useBodyMetrics();
+  const { items, add, update, remove } = useBodyMetrics();
   const [date, setDate] = useState(todayISO());
   const [values, setValues] = useState<FormValues>({ heightCm: "175" });
   const [draftLoadedFor, setDraftLoadedFor] = useState<string | null>(null);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<BodyMetric | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const draftKey = activeAthleteId ? `tf:body-assessment-draft:${activeAthleteId}` : null;
 
   useEffect(() => {
@@ -127,6 +128,27 @@ export default function Metricas() {
   const fatData = sorted.map((m) => ({ date: m.recordedAt, folds: m.bodyfatPct, bio: m.bioimpedanceBodyfatPct }));
   const circumferenceData = sorted.map((m) => ({ date: m.recordedAt, waist: m.waistCm, abdomen: m.abdomenCm, hip: m.hipCm, chest: m.chestCm }));
 
+  const ageOnAssessment = useMemo(() => {
+    if (!activeAthleteProfile?.birth_date || !date) return null;
+    const birth = new Date(`${activeAthleteProfile.birth_date}T12:00:00`);
+    const assessment = new Date(`${date}T12:00:00`);
+    let age = assessment.getFullYear() - birth.getFullYear();
+    if (assessment.getMonth() < birth.getMonth() || (assessment.getMonth() === birth.getMonth() && assessment.getDate() < birth.getDate())) age--;
+    return age > 0 ? age : null;
+  }, [activeAthleteProfile?.birth_date, date]);
+  const pollockResult = useMemo(() => {
+    const weight = Number(values.weightKg?.replace(",", "."));
+    const folds = skinfoldFields.map(([key]) => Number(values[key]?.replace(",", ".")));
+    if (!Number.isFinite(weight) || weight <= 0 || folds.some((value) => !Number.isFinite(value) || value <= 0) || !ageOnAssessment || !activeAthleteProfile?.biological_sex) return null;
+    const sum = folds.reduce((total, value) => total + value, 0);
+    const density = activeAthleteProfile.biological_sex === "masculino"
+      ? 1.112 - 0.00043499 * sum + 0.00000055 * sum ** 2 - 0.00028826 * ageOnAssessment
+      : 1.097 - 0.00046971 * sum + 0.00000056 * sum ** 2 - 0.00012828 * ageOnAssessment;
+    const bodyfatPct = Number((495 / density - 450).toFixed(1));
+    const fatMassKg = Number((weight * bodyfatPct / 100).toFixed(1));
+    return { bodyfatPct, fatMassKg, leanMassKg: Number((weight - fatMassKg).toFixed(1)), age: ageOnAssessment };
+  }, [activeAthleteProfile?.biological_sex, ageOnAssessment, values]);
+
   const setField = (field: NumericKey, value: string) => setValues((current) => ({ ...current, [field]: value }));
   const parse = (value?: string) => {
     if (!value?.trim()) return undefined;
@@ -145,17 +167,37 @@ export default function Metricas() {
       if (parsed != null) Object.assign(payload, { [key]: parsed });
     }
     payload.heightCm = parse(values.heightCm) ?? 175;
+    if (pollockResult) {
+      payload.bodyfatPct = pollockResult.bodyfatPct;
+      payload.fatMassKg = pollockResult.fatMassKg;
+      payload.leanMassKg = pollockResult.leanMassKg;
+    }
     if (payload.fatMassKg == null && payload.bodyfatPct != null) payload.fatMassKg = Number((weightKg * payload.bodyfatPct / 100).toFixed(1));
     if (payload.leanMassKg == null && payload.fatMassKg != null) payload.leanMassKg = Number((weightKg - payload.fatMassKg).toFixed(1));
     if (values.notes?.trim()) payload.notes = values.notes.trim();
-    const saved = await add(payload);
-    if (!saved) return;
+    if (editingId) await update(editingId, payload);
+    else {
+      const saved = await add(payload);
+      if (!saved) return;
+    }
     setValues({ heightCm: "175" });
     setDate(todayISO());
     if (draftKey) localStorage.removeItem(draftKey);
     setDraftSavedAt(null);
-    toast.success("Avaliação física registrada.");
+    setEditingId(null);
+    toast.success(editingId ? "Avaliação física atualizada." : "Avaliação física registrada.");
   };
+  const startEdit = (metric: BodyMetric) => {
+    const next: FormValues = {};
+    const keys = ["heightCm" as NumericKey, ...compositionFields.map(([key]) => key), ...skinfoldFields.map(([key]) => key), ...circumferenceFields.map(([key]) => key)];
+    keys.forEach((key) => { const value = metric[key]; if (typeof value === "number") next[key] = String(value); });
+    next.notes = metric.notes ?? "";
+    setDate(metric.recordedAt);
+    setValues(next);
+    setEditingId(metric.id);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const cancelEdit = () => { setEditingId(null); setDate(todayISO()); setValues({ heightCm: "175" }); };
   const confirmRemove = async () => {
     if (!pendingDelete) return;
     const removed = await remove(pendingDelete.id);
@@ -183,18 +225,19 @@ export default function Metricas() {
       <Card className="shadow-card"><CardHeader><CardTitle className="text-base">Percentual de gordura</CardTitle><CardDescription>Dobras cutâneas e bioimpedância são exibidas separadamente.</CardDescription></CardHeader><CardContent><EvolutionChart data={fatData} config={fatConfig} emptyText="São necessárias duas avaliações com percentual de gordura." lines={[{ key: "folds", color: "hsl(var(--chart-2))" }, { key: "bio", color: "hsl(var(--chart-3))" }]} /></CardContent></Card>
       <Card className="shadow-card xl:col-span-2"><CardHeader><CardTitle className="text-base">Circunferências do tronco</CardTitle><CardDescription>Peitoral, cintura, abdômen e quadril em centímetros.</CardDescription></CardHeader><CardContent><EvolutionChart data={circumferenceData} config={circumferenceConfig} emptyText="São necessárias duas avaliações com circunferências." lines={[{ key: "waist", color: "hsl(var(--chart-1))" }, { key: "abdomen", color: "hsl(var(--chart-2))" }, { key: "hip", color: "hsl(var(--chart-3))" }, { key: "chest", color: "hsl(var(--chart-4))" }]} /></CardContent></Card>
     </div>
-    <Card className="shadow-card"><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Plus className="h-4 w-4" />Nova avaliação</CardTitle><CardDescription>Campos não medidos podem ficar em branco. Massa magra e gordura são calculadas automaticamente quando possível. O preenchimento fica salvo neste aparelho até o registro definitivo.</CardDescription>{draftSavedAt && <p className="text-xs text-emerald-600">Rascunho salvo automaticamente às {new Date(draftSavedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.</p>}</CardHeader><CardContent>
+    <Card className="shadow-card"><CardHeader><CardTitle className="flex items-center gap-2 text-base">{editingId ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}{editingId ? "Editar avaliação" : "Nova avaliação"}</CardTitle><CardDescription>Com peso e as sete dobras preenchidos, o protocolo Jackson & Pollock calcula automaticamente gordura e massa magra. O preenchimento fica salvo neste aparelho.</CardDescription>{draftSavedAt && <p className="text-xs text-emerald-600">Rascunho salvo automaticamente às {new Date(draftSavedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.</p>}</CardHeader><CardContent>
       <form onSubmit={handleAdd} className="space-y-5">
         <div className="grid gap-3 sm:grid-cols-3"><div className="space-y-1"><Label className="text-[10px] uppercase text-muted-foreground">Data</Label><DateField value={date} onChange={setDate} max={todayISO()} /></div><MetricInput field="heightCm" label="Altura" unit="cm" value={values.heightCm} onChange={setField} /><MetricInput field="weightKg" label="Peso" unit="kg" value={values.weightKg} onChange={setField} required /></div>
         <details open className="rounded-lg border p-4"><summary className="cursor-pointer font-medium">Composição corporal</summary><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{compositionFields.filter(([key]) => key !== "weightKg").map(([key, label, unit]) => <MetricInput key={key} field={key} label={label} unit={unit} value={values[key]} onChange={setField} />)}</div></details>
         <details className="rounded-lg border p-4"><summary className="cursor-pointer font-medium">Dobras cutâneas</summary><p className="mt-1 text-xs text-muted-foreground">Valores em milímetros.</p><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{skinfoldFields.map(([key, label]) => <MetricInput key={key} field={key} label={label} unit="mm" value={values[key]} onChange={setField} />)}</div></details>
+        {pollockResult ? <div className="rounded-lg border border-primary/30 bg-primary/5 p-4"><p className="text-sm font-medium">Cálculo automático · Pollock 7 dobras · {pollockResult.age} anos</p><div className="mt-2 grid grid-cols-1 gap-2 text-sm sm:grid-cols-3"><span>Gordura <strong>{formatPct(pollockResult.bodyfatPct)}</strong></span><span>Massa gorda <strong>{formatKg(pollockResult.fatMassKg)}</strong></span><span>Massa magra <strong>{formatKg(pollockResult.leanMassKg)}</strong></span></div></div> : <p className="text-xs text-muted-foreground">Preencha peso e as sete dobras. Sexo e nascimento devem estar cadastrados em Configurações.</p>}
         <details className="rounded-lg border p-4"><summary className="cursor-pointer font-medium">Circunferências</summary><p className="mt-1 text-xs text-muted-foreground">Valores em centímetros.</p><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{circumferenceFields.map(([key, label]) => <MetricInput key={key} field={key} label={label} unit="cm" value={values[key]} onChange={setField} />)}</div></details>
         <div className="space-y-1"><Label className="text-[10px] uppercase text-muted-foreground">Observações</Label><Textarea value={values.notes ?? ""} onChange={(e) => setValues((v) => ({ ...v, notes: e.target.value }))} placeholder="Condições da avaliação, método ou observações do profissional" /></div>
-        <Button type="submit" className="bg-gradient-primary text-primary-foreground hover:opacity-90">Registrar avaliação</Button>
+        <div className="flex gap-2"><Button type="submit" className="bg-gradient-primary text-primary-foreground hover:opacity-90">{editingId ? "Salvar alterações" : "Registrar avaliação"}</Button>{editingId && <Button type="button" variant="outline" onClick={cancelEdit}><X className="h-4 w-4" />Cancelar edição</Button>}</div>
       </form>
     </CardContent></Card>
     <Card className="shadow-card"><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Ruler className="h-4 w-4" />Histórico de avaliações</CardTitle><CardDescription>{sorted.length} avaliações registradas.</CardDescription></CardHeader><CardContent>
-      {sorted.length === 0 ? <EmptyState icon={Scale} title="Nenhuma avaliação" description="Cadastre a primeira avaliação física." /> : <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-sm"><thead><tr className="border-b text-left text-xs uppercase text-muted-foreground"><th className="py-3">Data</th><th>Peso</th><th>Gordura</th><th>Bio</th><th>Massa magra</th><th>Cintura</th><th>Abdômen</th><th className="text-right">Ações</th></tr></thead><tbody>{[...sorted].reverse().map((m) => <tr key={m.id} className="border-b last:border-0"><td className="py-3 font-medium">{formatShortDate(m.recordedAt)}</td><td>{formatKg(m.weightKg)}</td><td>{m.bodyfatPct == null ? "—" : formatPct(m.bodyfatPct)}</td><td>{m.bioimpedanceBodyfatPct == null ? "—" : formatPct(m.bioimpedanceBodyfatPct)}</td><td>{m.leanMassKg == null ? "—" : formatKg(m.leanMassKg)}</td><td>{m.waistCm == null ? "—" : `${formatNumber(m.waistCm)} cm`}</td><td>{m.abdomenCm == null ? "—" : `${formatNumber(m.abdomenCm)} cm`}</td><td className="text-right"><Button type="button" variant="ghost" size="icon" aria-label="Baixar avaliação em PDF" onClick={() => downloadAssessmentPdf(m, activeAthleteProfile?.full_name || activeAthleteProfile?.email || "Atleta")}><Download className="h-4 w-4" /></Button><Button type="button" variant="ghost" size="icon" aria-label="Excluir avaliação" onClick={() => setPendingDelete(m)}><Trash2 className="h-4 w-4 text-destructive" /></Button></td></tr>)}</tbody></table></div>}
+      {sorted.length === 0 ? <EmptyState icon={Scale} title="Nenhuma avaliação" description="Cadastre a primeira avaliação física." /> : <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-sm"><thead><tr className="border-b text-left text-xs uppercase text-muted-foreground"><th className="py-3">Data</th><th>Peso</th><th>Gordura</th><th>Bio</th><th>Massa magra</th><th>Cintura</th><th>Abdômen</th><th className="text-right">Ações</th></tr></thead><tbody>{[...sorted].reverse().map((m) => <tr key={m.id} className="border-b last:border-0"><td className="py-3 font-medium">{formatShortDate(m.recordedAt)}</td><td>{formatKg(m.weightKg)}</td><td>{m.bodyfatPct == null ? "—" : formatPct(m.bodyfatPct)}</td><td>{m.bioimpedanceBodyfatPct == null ? "—" : formatPct(m.bioimpedanceBodyfatPct)}</td><td>{m.leanMassKg == null ? "—" : formatKg(m.leanMassKg)}</td><td>{m.waistCm == null ? "—" : `${formatNumber(m.waistCm)} cm`}</td><td>{m.abdomenCm == null ? "—" : `${formatNumber(m.abdomenCm)} cm`}</td><td className="text-right"><Button type="button" variant="ghost" size="icon" aria-label="Editar avaliação" onClick={() => startEdit(m)}><Pencil className="h-4 w-4" /></Button><Button type="button" variant="ghost" size="icon" aria-label="Baixar avaliação em PDF" onClick={() => downloadAssessmentPdf(m, activeAthleteProfile?.full_name || activeAthleteProfile?.email || "Atleta")}><Download className="h-4 w-4" /></Button><Button type="button" variant="ghost" size="icon" aria-label="Excluir avaliação" onClick={() => setPendingDelete(m)}><Trash2 className="h-4 w-4 text-destructive" /></Button></td></tr>)}</tbody></table></div>}
     </CardContent></Card>
     <AlertDialog open={!!pendingDelete} onOpenChange={(open) => { if (!open) setPendingDelete(null); }}>
       <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Excluir esta avaliação?</AlertDialogTitle><AlertDialogDescription>A avaliação de {pendingDelete ? formatShortDate(pendingDelete.recordedAt) : ""} será apagada permanentemente. Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => void confirmRemove()}>Excluir avaliação</AlertDialogAction></AlertDialogFooter></AlertDialogContent>

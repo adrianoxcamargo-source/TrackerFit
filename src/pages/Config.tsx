@@ -2,6 +2,9 @@ import { RotateCcw, Save, Settings, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useActiveAthlete } from "@/hooks/use-active-athlete";
+import { useAuth } from "@/hooks/use-auth";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,6 +27,7 @@ import {
 import { DateField } from "@/components/date-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader } from "@/components/page-header";
 import {
   DEFAULT_SETTINGS,
@@ -52,6 +56,8 @@ function Field({
 }
 
 export default function Config() {
+  const { activeAthleteId, activeAthleteProfile, refresh } = useActiveAthlete();
+  const { refreshProfile } = useAuth();
   const navigate = useNavigate();
   const { settings, setSettings } = useSettings();
   const importPlan = useImportDefaultPlan();
@@ -60,10 +66,17 @@ export default function Config() {
     settings ?? DEFAULT_SETTINGS,
   );
   const [saving, setSaving] = useState(false);
+  const [biologicalSex, setBiologicalSex] = useState<"masculino" | "feminino" | "">("");
+  const [birthDate, setBirthDate] = useState("");
 
   useEffect(() => {
     if (settings) setDraft(settings);
   }, [settings]);
+
+  useEffect(() => {
+    setBiologicalSex(activeAthleteProfile?.biological_sex ?? "");
+    setBirthDate(activeAthleteProfile?.birth_date ?? "");
+  }, [activeAthleteProfile]);
 
   const update = (patch: Partial<ProgramSettings>) =>
     setDraft((d) => ({ ...d, ...patch }));
@@ -74,8 +87,24 @@ export default function Config() {
   };
 
   const handleSave = async () => {
+    if (!activeAthleteId || !biologicalSex || !birthDate) {
+      toast.error("Informe sexo biológico e data de nascimento do atleta.");
+      return;
+    }
     setSaving(true);
+    const { error } = await supabase.rpc("update_athlete_demographics", {
+      target_athlete: activeAthleteId,
+      target_sex: biologicalSex,
+      target_birth_date: birthDate,
+    });
+    if (error) {
+      setSaving(false);
+      toast.error(error.message);
+      return;
+    }
     await setSettings(draft);
+    refresh();
+    await refreshProfile();
     setSaving(false);
     toast.success("Configurações salvas.");
   };
@@ -99,6 +128,22 @@ export default function Config() {
         description="Dados do programa, metas e duração. A data de início define a fase atual."
         icon={Settings}
       />
+
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle>Cadastro do atleta</CardTitle>
+          <CardDescription>Dados usados no cálculo Jackson & Pollock de 7 dobras. A idade é calculada automaticamente na data de cada avaliação.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Sexo biológico">
+            <Select value={biologicalSex} onValueChange={(value) => setBiologicalSex(value as "masculino" | "feminino")}>
+              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <SelectContent><SelectItem value="masculino">Masculino</SelectItem><SelectItem value="feminino">Feminino</SelectItem></SelectContent>
+            </Select>
+          </Field>
+          <Field label="Data de nascimento"><DateField value={birthDate} onChange={setBirthDate} max={new Date().toISOString().slice(0, 10)} /></Field>
+        </CardContent>
+      </Card>
 
       <Card className="shadow-card">
         <CardHeader>
