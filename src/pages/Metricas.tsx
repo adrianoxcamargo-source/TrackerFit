@@ -1,236 +1,161 @@
-import { Scale } from "lucide-react";
-import { useState } from "react";
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ReferenceLine,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Activity, Plus, Ruler, Scale, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { EmptyState } from "@/components/empty-state";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { DateField } from "@/components/date-field";
+import { EmptyState } from "@/components/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/page-header";
+import { Textarea } from "@/components/ui/textarea";
+import { formatKg, formatNumber, formatPct, formatShortDate, todayISO } from "@/lib/format";
 import { useBodyMetrics, useSettings } from "@/lib/store";
-import {
-  formatKg,
-  formatNumber,
-  formatPct,
-  formatShortDate,
-  todayISO,
-} from "@/lib/format";
+import type { BodyMetric } from "@/lib/types";
 
-const weightConfig: ChartConfig = {
-  weight: { label: "Peso (kg)", color: "hsl(var(--chart-1))" },
-};
-const fatConfig: ChartConfig = {
-  bodyfat: { label: "Gordura (%)", color: "hsl(var(--chart-2))" },
-};
+type NumericKey = Exclude<keyof BodyMetric, "id" | "recordedAt" | "notes">;
+type FormValues = Partial<Record<NumericKey, string>> & { notes?: string };
+
+const compositionFields: Array<[NumericKey, string, string]> = [
+  ["weightKg", "Peso", "kg"], ["bodyfatPct", "Gordura por dobras", "%"],
+  ["bioimpedanceBodyfatPct", "Gordura por bioimpedância", "%"],
+  ["bioimpedanceMusclePct", "Muscular por bioimpedância", "%"],
+  ["fatMassKg", "Massa de gordura", "kg"], ["leanMassKg", "Massa magra", "kg"],
+  ["visceralFat", "Gordura visceral", "nível"], ["metabolicRateKcal", "Gasto metabólico", "kcal"],
+];
+const skinfoldFields: Array<[NumericKey, string]> = [
+  ["skinfoldSubscapularMm", "Subescapular"], ["skinfoldTricepsMm", "Tríceps"],
+  ["skinfoldChestMm", "Peitoral"], ["skinfoldAxillaryMm", "Axilar"],
+  ["skinfoldObliqueMm", "Oblíqua"], ["skinfoldAbdominalMm", "Abdominal"],
+  ["skinfoldThighMm", "Coxa"],
+];
+const circumferenceFields: Array<[NumericKey, string]> = [
+  ["chestCm", "Peitoral"], ["waistCm", "Cintura"], ["abdomenCm", "Abdômen"], ["hipCm", "Quadril"],
+  ["rightArmCm", "Braço direito"], ["leftArmCm", "Braço esquerdo"],
+  ["rightThighCm", "Coxa direita"], ["leftThighCm", "Coxa esquerda"],
+  ["rightCalfCm", "Panturrilha direita"], ["leftCalfCm", "Panturrilha esquerda"],
+];
+
+const compositionConfig = {
+  leanMass: { label: "Massa magra", color: "hsl(var(--chart-1))" },
+  fatMass: { label: "Massa de gordura", color: "hsl(var(--chart-2))" },
+} satisfies ChartConfig;
+const fatConfig = {
+  folds: { label: "Dobras", color: "hsl(var(--chart-2))" },
+  bio: { label: "Bioimpedância", color: "hsl(var(--chart-3))" },
+} satisfies ChartConfig;
+const circumferenceConfig = {
+  waist: { label: "Cintura", color: "hsl(var(--chart-1))" },
+  abdomen: { label: "Abdômen", color: "hsl(var(--chart-2))" },
+  hip: { label: "Quadril", color: "hsl(var(--chart-3))" },
+  chest: { label: "Peitoral", color: "hsl(var(--chart-4))" },
+} satisfies ChartConfig;
+
+function MetricInput({ field, label, unit, value, onChange, required = false }: {
+  field: NumericKey; label: string; unit: string; value?: string;
+  onChange: (field: NumericKey, value: string) => void; required?: boolean;
+}) {
+  return <div className="space-y-1">
+    <Label htmlFor={field} className="text-[10px] uppercase text-muted-foreground">{label} ({unit})</Label>
+    <Input id={field} type="number" step="0.1" min="0" required={required} value={value ?? ""}
+      onChange={(e) => onChange(field, e.target.value)} className="h-9" />
+  </div>;
+}
+
+function EvolutionChart({ data, config, lines, emptyText }: {
+  data: Array<Record<string, string | number | undefined>>; config: ChartConfig;
+  lines: Array<{ key: string; color: string }>; emptyText: string;
+}) {
+  if (data.length < 2) return <EmptyState icon={Activity} title="Poucos registros" description={emptyText} />;
+  return <ChartContainer config={config} className="aspect-auto h-[250px] w-full">
+    <LineChart data={data} margin={{ left: -8, right: 12, top: 8 }}>
+      <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
+      <XAxis dataKey="date" tickFormatter={formatShortDate} tickLine={false} axisLine={false} fontSize={11} />
+      <YAxis domain={["dataMin - 2", "dataMax + 2"]} tickLine={false} axisLine={false} fontSize={11} width={42} />
+      <ChartTooltip content={<ChartTooltipContent labelFormatter={(v) => formatShortDate(String(v))} />} />
+      {lines.map((line) => <Line key={line.key} dataKey={line.key} type="monotone" stroke={line.color} strokeWidth={2.5} dot={{ r: 3 }} connectNulls />)}
+    </LineChart>
+  </ChartContainer>;
+}
 
 export default function Metricas() {
   const { settings } = useSettings();
-  const { items, add } = useBodyMetrics();
+  const { items, add, remove } = useBodyMetrics();
   const [date, setDate] = useState(todayISO());
-  const [weight, setWeight] = useState("");
-  const [bodyfat, setBodyfat] = useState("");
-
-  const sorted = [...items].sort((a, b) =>
-    a.recordedAt < b.recordedAt ? -1 : 1,
-  );
-  const weightData = sorted.map((m) => ({ date: m.recordedAt, weight: m.weightKg }));
-  const fatData = sorted
-    .filter((m) => m.bodyfatPct != null)
-    .map((m) => ({ date: m.recordedAt, bodyfat: m.bodyfatPct as number }));
-
+  const [values, setValues] = useState<FormValues>({ heightCm: "175" });
+  const sorted = useMemo(() => [...items].sort((a, b) => a.recordedAt.localeCompare(b.recordedAt)), [items]);
+  const first = sorted[0];
   const latest = sorted[sorted.length - 1];
-  const currentWeight = latest?.weightKg ?? settings?.currentWeightKg ?? 0;
-  const currentFat = latest?.bodyfatPct ?? settings?.currentBodyfatPct ?? 0;
+  const compositionData = sorted.map((m) => ({ date: m.recordedAt, leanMass: m.leanMassKg, fatMass: m.fatMassKg }));
+  const fatData = sorted.map((m) => ({ date: m.recordedAt, folds: m.bodyfatPct, bio: m.bioimpedanceBodyfatPct }));
+  const circumferenceData = sorted.map((m) => ({ date: m.recordedAt, waist: m.waistCm, abdomen: m.abdomenCm, hip: m.hipCm, chest: m.chestCm }));
 
-  const weightDelta = settings
-    ? currentWeight - settings.goalWeightKg
-    : 0;
-  const fatDelta = settings ? currentFat - settings.goalBodyfatPct : 0;
-
-  const handleAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const w = Number(weight.replace(",", "."));
-    if (!Number.isFinite(w) || w <= 0) {
-      toast.error("Informe um peso válido.");
-      return;
-    }
-    const f = bodyfat
-      ? Number(bodyfat.replace(",", "."))
-      : null;
-    await add({ recordedAt: date, weightKg: w, bodyfatPct: f });
-    setWeight("");
-    setBodyfat("");
-    toast.success("Métrica registrada.");
+  const setField = (field: NumericKey, value: string) => setValues((current) => ({ ...current, [field]: value }));
+  const parse = (value?: string) => {
+    if (!value?.trim()) return undefined;
+    const parsed = Number(value.replace(",", "."));
+    return Number.isFinite(parsed) ? parsed : undefined;
   };
-
+  const handleAdd = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const weightKg = parse(values.weightKg);
+    if (!weightKg || weightKg <= 0) return toast.error("Informe um peso válido.");
+    const payload = { recordedAt: date, weightKg } as Omit<BodyMetric, "id">;
+    const keys = [...compositionFields.map(([key]) => key), ...skinfoldFields.map(([key]) => key), ...circumferenceFields.map(([key]) => key)];
+    for (const key of keys) {
+      if (key === "weightKg") continue;
+      const parsed = parse(values[key]);
+      if (parsed != null) Object.assign(payload, { [key]: parsed });
+    }
+    payload.heightCm = parse(values.heightCm) ?? 175;
+    if (payload.fatMassKg == null && payload.bodyfatPct != null) payload.fatMassKg = Number((weightKg * payload.bodyfatPct / 100).toFixed(1));
+    if (payload.leanMassKg == null && payload.fatMassKg != null) payload.leanMassKg = Number((weightKg - payload.fatMassKg).toFixed(1));
+    if (values.notes?.trim()) payload.notes = values.notes.trim();
+    const saved = await add(payload);
+    if (!saved) return;
+    setValues({ heightCm: "175" });
+    toast.success("Avaliação física registrada.");
+  };
+  const confirmRemove = async (metric: BodyMetric) => {
+    if (!window.confirm(`Excluir a avaliação de ${formatShortDate(metric.recordedAt)}?`)) return;
+    await remove(metric.id);
+    toast.success("Avaliação excluída.");
+  };
   if (!settings) return null;
+  const weightChange = first && latest ? latest.weightKg - first.weightKg : 0;
+  const fatMassChange = first?.fatMassKg != null && latest?.fatMassKg != null ? latest.fatMassKg - first.fatMassKg : null;
+  const leanMassChange = first?.leanMassKg != null && latest?.leanMassKg != null ? latest.leanMassKg - first.leanMassKg : null;
+  const waistChange = first?.waistCm != null && latest?.waistCm != null ? latest.waistCm - first.waistCm : null;
 
-  return (
-    <>
-      <PageHeader
-        title="Métricas corporais"
-        description="Peso e gordura rumo à meta do programa."
-        icon={Scale}
-      />
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Card className="p-4 shadow-card">
-          <p className="text-xs uppercase text-muted-foreground">Peso atual</p>
-          <p className="mt-1 text-xl font-semibold text-foreground">
-            {formatKg(currentWeight)}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Meta {formatKg(settings.goalWeightKg)}
-          </p>
-        </Card>
-        <Card className="p-4 shadow-card">
-          <p className="text-xs uppercase text-muted-foreground">Acima meta</p>
-          <p className="mt-1 text-xl font-semibold text-primary">
-            {weightDelta > 0 ? "+" : ""}
-            {formatNumber(weightDelta)} kg
-          </p>
-          <p className="text-xs text-muted-foreground">acima da meta</p>
-        </Card>
-        <Card className="p-4 shadow-card">
-          <p className="text-xs uppercase text-muted-foreground">Gordura atual</p>
-          <p className="mt-1 text-xl font-semibold text-foreground">
-            {formatPct(currentFat)}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Meta {formatPct(settings.goalBodyfatPct)}
-          </p>
-        </Card>
-        <Card className="p-4 shadow-card">
-          <p className="text-xs uppercase text-muted-foreground">Acima meta</p>
-          <p className="mt-1 text-xl font-semibold text-primary">
-            {fatDelta > 0 ? "+" : ""}
-            {formatNumber(fatDelta)}%
-          </p>
-          <p className="text-xs text-muted-foreground">acima da meta</p>
-        </Card>
-      </div>
-
-      <Card className="shadow-card">
-        <CardHeader>
-          <CardTitle className="text-base">Registrar métrica</CardTitle>
-          <CardDescription>Peso e % de gordura corporal.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleAdd} className="flex flex-wrap items-end gap-3">
-            <div className="space-y-1">
-              <Label className="text-[10px] uppercase text-muted-foreground">Data</Label>
-              <DateField value={date} onChange={setDate} max={todayISO()} inputClassName="w-[130px]" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] uppercase text-muted-foreground">Peso (kg)</Label>
-              <Input
-                type="number"
-                step="0.1"
-                required
-                value={weight}
-                onChange={(e) => setWeight(e.target.value)}
-                placeholder="80,0"
-                className="w-[120px]"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] uppercase text-muted-foreground">Gordura (%)</Label>
-              <Input
-                type="number"
-                step="0.1"
-                value={bodyfat}
-                onChange={(e) => setBodyfat(e.target.value)}
-                placeholder="18,3"
-                className="w-[120px]"
-              />
-            </div>
-            <Button type="submit" className="bg-gradient-primary text-primary-foreground hover:opacity-90">
-              Registrar
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle className="text-base">Evolução do peso</CardTitle>
-            <CardDescription>Meta: {formatKg(settings.goalWeightKg)}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {weightData.length < 2 ? (
-              <EmptyState icon={Scale} title="Poucos registros" description="Registre o peso em ao menos 2 dias." />
-            ) : (
-              <ChartContainer config={weightConfig} className="aspect-auto h-[240px] w-full">
-                <AreaChart data={weightData} margin={{ left: -10, right: 12, top: 8 }}>
-                  <defs>
-                    <linearGradient id="wFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="hsl(var(--chart-1))" stopOpacity={0.4} />
-                      <stop offset="100%" stopColor="hsl(var(--chart-1))" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" tickFormatter={formatShortDate} tickLine={false} axisLine={false} fontSize={12} />
-                  <YAxis domain={["dataMin - 1", "dataMax + 1"]} tickLine={false} axisLine={false} fontSize={12} width={40} />
-                  <ChartTooltip content={<ChartTooltipContent labelFormatter={(l) => formatShortDate(String(l))} />} />
-                  <ReferenceLine y={settings.goalWeightKg} stroke="hsl(var(--chart-3))" strokeDasharray="4 4" />
-                  <Area dataKey="weight" type="monotone" stroke="hsl(var(--chart-1))" fill="url(#wFill)" strokeWidth={2} />
-                </AreaChart>
-              </ChartContainer>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle className="text-base">Evolução da gordura</CardTitle>
-            <CardDescription>Meta: {formatPct(settings.goalBodyfatPct)}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {fatData.length < 2 ? (
-              <EmptyState icon={Scale} title="Poucos registros" description="Registre a gordura em ao menos 2 dias." />
-            ) : (
-              <ChartContainer config={fatConfig} className="aspect-auto h-[240px] w-full">
-                <AreaChart data={fatData} margin={{ left: -10, right: 12, top: 8 }}>
-                  <defs>
-                    <linearGradient id="fFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="hsl(var(--chart-2))" stopOpacity={0.4} />
-                      <stop offset="100%" stopColor="hsl(var(--chart-2))" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" tickFormatter={formatShortDate} tickLine={false} axisLine={false} fontSize={12} />
-                  <YAxis domain={["dataMin - 1", "dataMax + 1"]} tickLine={false} axisLine={false} fontSize={12} width={40} />
-                  <ChartTooltip content={<ChartTooltipContent labelFormatter={(l) => formatShortDate(String(l))} />} />
-                  <ReferenceLine y={settings.goalBodyfatPct} stroke="hsl(var(--chart-3))" strokeDasharray="4 4" />
-                  <Area dataKey="bodyfat" type="monotone" stroke="hsl(var(--chart-2))" fill="url(#fFill)" strokeWidth={2} />
-                </AreaChart>
-              </ChartContainer>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </>
-  );
+  return <>
+    <PageHeader title="Métricas corporais" description="Evolução das avaliações físicas e da composição corporal." icon={Scale} />
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {[
+        ["Peso", latest ? formatKg(latest.weightKg) : "—", `${weightChange > 0 ? "+" : ""}${formatNumber(weightChange)} kg desde o início`],
+        ["Gordura", latest?.bodyfatPct != null ? formatPct(latest.bodyfatPct) : "—", fatMassChange == null ? "massa não informada" : `${formatNumber(fatMassChange)} kg de gordura`],
+        ["Massa magra", latest?.leanMassKg != null ? formatKg(latest.leanMassKg) : "—", leanMassChange == null ? "sem comparação" : `${leanMassChange > 0 ? "+" : ""}${formatNumber(leanMassChange)} kg`],
+        ["Cintura", latest?.waistCm != null ? `${formatNumber(latest.waistCm)} cm` : "—", waistChange == null ? "sem comparação" : `${formatNumber(waistChange)} cm`],
+      ].map(([label, value, detail]) => <Card key={label} className="p-4 shadow-card"><p className="text-xs uppercase text-muted-foreground">{label}</p><p className="mt-1 text-xl font-semibold">{value}</p><p className="text-xs text-muted-foreground">{detail}</p></Card>)}
+    </div>
+    <div className="grid gap-4 xl:grid-cols-2">
+      <Card className="shadow-card"><CardHeader><CardTitle className="text-base">Composição corporal</CardTitle><CardDescription>Massa magra e massa de gordura em quilogramas.</CardDescription></CardHeader><CardContent><EvolutionChart data={compositionData} config={compositionConfig} emptyText="São necessárias duas avaliações completas." lines={[{ key: "leanMass", color: "hsl(var(--chart-1))" }, { key: "fatMass", color: "hsl(var(--chart-2))" }]} /></CardContent></Card>
+      <Card className="shadow-card"><CardHeader><CardTitle className="text-base">Percentual de gordura</CardTitle><CardDescription>Dobras cutâneas e bioimpedância são exibidas separadamente.</CardDescription></CardHeader><CardContent><EvolutionChart data={fatData} config={fatConfig} emptyText="São necessárias duas avaliações com percentual de gordura." lines={[{ key: "folds", color: "hsl(var(--chart-2))" }, { key: "bio", color: "hsl(var(--chart-3))" }]} /></CardContent></Card>
+      <Card className="shadow-card xl:col-span-2"><CardHeader><CardTitle className="text-base">Circunferências do tronco</CardTitle><CardDescription>Peitoral, cintura, abdômen e quadril em centímetros.</CardDescription></CardHeader><CardContent><EvolutionChart data={circumferenceData} config={circumferenceConfig} emptyText="São necessárias duas avaliações com circunferências." lines={[{ key: "waist", color: "hsl(var(--chart-1))" }, { key: "abdomen", color: "hsl(var(--chart-2))" }, { key: "hip", color: "hsl(var(--chart-3))" }, { key: "chest", color: "hsl(var(--chart-4))" }]} /></CardContent></Card>
+    </div>
+    <Card className="shadow-card"><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Plus className="h-4 w-4" />Nova avaliação</CardTitle><CardDescription>Campos não medidos podem ficar em branco. Massa magra e gordura são calculadas automaticamente quando possível.</CardDescription></CardHeader><CardContent>
+      <form onSubmit={handleAdd} className="space-y-5">
+        <div className="grid gap-3 sm:grid-cols-3"><div className="space-y-1"><Label className="text-[10px] uppercase text-muted-foreground">Data</Label><DateField value={date} onChange={setDate} max={todayISO()} /></div><MetricInput field="heightCm" label="Altura" unit="cm" value={values.heightCm} onChange={setField} /><MetricInput field="weightKg" label="Peso" unit="kg" value={values.weightKg} onChange={setField} required /></div>
+        <details open className="rounded-lg border p-4"><summary className="cursor-pointer font-medium">Composição corporal</summary><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{compositionFields.filter(([key]) => key !== "weightKg").map(([key, label, unit]) => <MetricInput key={key} field={key} label={label} unit={unit} value={values[key]} onChange={setField} />)}</div></details>
+        <details className="rounded-lg border p-4"><summary className="cursor-pointer font-medium">Dobras cutâneas</summary><p className="mt-1 text-xs text-muted-foreground">Valores em milímetros.</p><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{skinfoldFields.map(([key, label]) => <MetricInput key={key} field={key} label={label} unit="mm" value={values[key]} onChange={setField} />)}</div></details>
+        <details className="rounded-lg border p-4"><summary className="cursor-pointer font-medium">Circunferências</summary><p className="mt-1 text-xs text-muted-foreground">Valores em centímetros.</p><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{circumferenceFields.map(([key, label]) => <MetricInput key={key} field={key} label={label} unit="cm" value={values[key]} onChange={setField} />)}</div></details>
+        <div className="space-y-1"><Label className="text-[10px] uppercase text-muted-foreground">Observações</Label><Textarea value={values.notes ?? ""} onChange={(e) => setValues((v) => ({ ...v, notes: e.target.value }))} placeholder="Condições da avaliação, método ou observações do profissional" /></div>
+        <Button type="submit" className="bg-gradient-primary text-primary-foreground hover:opacity-90">Registrar avaliação</Button>
+      </form>
+    </CardContent></Card>
+    <Card className="shadow-card"><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Ruler className="h-4 w-4" />Histórico de avaliações</CardTitle><CardDescription>{sorted.length} avaliações registradas.</CardDescription></CardHeader><CardContent>
+      {sorted.length === 0 ? <EmptyState icon={Scale} title="Nenhuma avaliação" description="Cadastre a primeira avaliação física." /> : <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-sm"><thead><tr className="border-b text-left text-xs uppercase text-muted-foreground"><th className="py-3">Data</th><th>Peso</th><th>Gordura</th><th>Bio</th><th>Massa magra</th><th>Cintura</th><th>Abdômen</th><th className="text-right">Ações</th></tr></thead><tbody>{[...sorted].reverse().map((m) => <tr key={m.id} className="border-b last:border-0"><td className="py-3 font-medium">{formatShortDate(m.recordedAt)}</td><td>{formatKg(m.weightKg)}</td><td>{m.bodyfatPct == null ? "—" : formatPct(m.bodyfatPct)}</td><td>{m.bioimpedanceBodyfatPct == null ? "—" : formatPct(m.bioimpedanceBodyfatPct)}</td><td>{m.leanMassKg == null ? "—" : formatKg(m.leanMassKg)}</td><td>{m.waistCm == null ? "—" : `${formatNumber(m.waistCm)} cm`}</td><td>{m.abdomenCm == null ? "—" : `${formatNumber(m.abdomenCm)} cm`}</td><td className="text-right"><Button type="button" variant="ghost" size="icon" aria-label="Excluir avaliação" onClick={() => confirmRemove(m)}><Trash2 className="h-4 w-4 text-destructive" /></Button></td></tr>)}</tbody></table></div>}
+    </CardContent></Card>
+  </>;
 }
