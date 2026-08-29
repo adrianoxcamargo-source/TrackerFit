@@ -252,6 +252,8 @@ export interface ProfileRow {
   email: string;
   full_name: string;
   role: "atleta" | "treinador";
+  biological_sex?: "masculino" | "feminino";
+  birth_date?: string;
 }
 export function mapProfile(r: Row): ProfileRow {
   return {
@@ -259,5 +261,7 @@ export function mapProfile(r: Row): ProfileRow {
     email: r.email as string,
     full_name: (r.full_name as string) ?? "",
     role: (r.role as "atleta" | "treinador") ?? "atleta",
+    biological_sex: (r.biological_sex as "masculino" | "feminino") ?? undefined,
+    birth_date: (r.birth_date as string) ?? undefined,
   };
 }
