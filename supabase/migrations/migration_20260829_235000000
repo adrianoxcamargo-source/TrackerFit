@@ -1,0 +1,29 @@
+alter table public.profiles
+  add column if not exists biological_sex text check (biological_sex in ('masculino', 'feminino')),
+  add column if not exists birth_date date;
+
+create or replace function public.update_athlete_demographics(target_athlete uuid, target_sex text, target_birth_date date)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.can_access_athlete(target_athlete) then raise exception 'Acesso negado'; end if;
+  if target_sex not in ('masculino', 'feminino') then raise exception 'Sexo biologico invalido'; end if;
+  if target_birth_date >= current_date then raise exception 'Data de nascimento invalida'; end if;
+  update public.profiles set biological_sex = target_sex, birth_date = target_birth_date
+  where id = target_athlete and role = 'atleta';
+end; $$;
+
+revoke all on function public.update_athlete_demographics(uuid, text, date) from public;
+grant execute on function public.update_athlete_demographics(uuid, text, date) to authenticated;
+
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.profiles (id, email, full_name, role, biological_sex, birth_date)
+  values (new.id, coalesce(new.email, ''), coalesce(new.raw_user_meta_data->>'full_name', ''),
+    coalesce(new.raw_user_meta_data->>'role', 'atleta'), nullif(new.raw_user_meta_data->>'biological_sex', ''),
+    nullif(new.raw_user_meta_data->>'birth_date', '')::date)
+  on conflict (id) do update set email = excluded.email, full_name = excluded.full_name,
+    role = excluded.role, biological_sex = coalesce(excluded.biological_sex, profiles.biological_sex),
+    birth_date = coalesce(excluded.birth_date, profiles.birth_date);
+  return new;
+end; $$;
