@@ -11,6 +11,7 @@ import type {
 
 type Row = Record<string, unknown>;
 const n = (v: unknown) => (typeof v === "number" ? v : Number(v));
+const optionalNumber = (v: unknown) => v == null ? undefined : n(v);
 
 /* ----------------------------- Exercises ----------------------------- */
 export function mapExercise(r: Row): Exercise {
@@ -154,6 +155,31 @@ export function mapBodyMetric(r: Row): BodyMetric {
     recordedAt: r.recorded_at as string,
     weightKg: n(r.weight_kg),
     bodyfatPct: r.bodyfat_pct == null ? undefined : n(r.bodyfat_pct),
+    bioimpedanceBodyfatPct: optionalNumber(r.bioimpedance_bodyfat_pct),
+    bioimpedanceMusclePct: optionalNumber(r.bioimpedance_muscle_pct),
+    fatMassKg: optionalNumber(r.fat_mass_kg),
+    leanMassKg: optionalNumber(r.lean_mass_kg),
+    visceralFat: optionalNumber(r.visceral_fat),
+    metabolicRateKcal: optionalNumber(r.metabolic_rate_kcal),
+    heightCm: optionalNumber(r.height_cm),
+    skinfoldSubscapularMm: optionalNumber(r.skinfold_subscapular_mm),
+    skinfoldTricepsMm: optionalNumber(r.skinfold_triceps_mm),
+    skinfoldChestMm: optionalNumber(r.skinfold_chest_mm),
+    skinfoldAxillaryMm: optionalNumber(r.skinfold_axillary_mm),
+    skinfoldObliqueMm: optionalNumber(r.skinfold_oblique_mm),
+    skinfoldAbdominalMm: optionalNumber(r.skinfold_abdominal_mm),
+    skinfoldThighMm: optionalNumber(r.skinfold_thigh_mm),
+    chestCm: optionalNumber(r.chest_cm),
+    waistCm: optionalNumber(r.waist_cm),
+    abdomenCm: optionalNumber(r.abdomen_cm),
+    hipCm: optionalNumber(r.hip_cm),
+    rightArmCm: optionalNumber(r.right_arm_cm),
+    leftArmCm: optionalNumber(r.left_arm_cm),
+    rightThighCm: optionalNumber(r.right_thigh_cm),
+    leftThighCm: optionalNumber(r.left_thigh_cm),
+    rightCalfCm: optionalNumber(r.right_calf_cm),
+    leftCalfCm: optionalNumber(r.left_calf_cm),
+    notes: (r.notes as string) ?? undefined,
   };
 }
 export function bodyMetricToRow(b: Partial<BodyMetric>): Row {
@@ -161,6 +187,31 @@ export function bodyMetricToRow(b: Partial<BodyMetric>): Row {
   if ("recordedAt" in b) o.recorded_at = b.recordedAt;
   if ("weightKg" in b) o.weight_kg = b.weightKg;
   if ("bodyfatPct" in b) o.bodyfat_pct = b.bodyfatPct;
+  if ("bioimpedanceBodyfatPct" in b) o.bioimpedance_bodyfat_pct = b.bioimpedanceBodyfatPct;
+  if ("bioimpedanceMusclePct" in b) o.bioimpedance_muscle_pct = b.bioimpedanceMusclePct;
+  if ("fatMassKg" in b) o.fat_mass_kg = b.fatMassKg;
+  if ("leanMassKg" in b) o.lean_mass_kg = b.leanMassKg;
+  if ("visceralFat" in b) o.visceral_fat = b.visceralFat;
+  if ("metabolicRateKcal" in b) o.metabolic_rate_kcal = b.metabolicRateKcal;
+  if ("heightCm" in b) o.height_cm = b.heightCm;
+  if ("skinfoldSubscapularMm" in b) o.skinfold_subscapular_mm = b.skinfoldSubscapularMm;
+  if ("skinfoldTricepsMm" in b) o.skinfold_triceps_mm = b.skinfoldTricepsMm;
+  if ("skinfoldChestMm" in b) o.skinfold_chest_mm = b.skinfoldChestMm;
+  if ("skinfoldAxillaryMm" in b) o.skinfold_axillary_mm = b.skinfoldAxillaryMm;
+  if ("skinfoldObliqueMm" in b) o.skinfold_oblique_mm = b.skinfoldObliqueMm;
+  if ("skinfoldAbdominalMm" in b) o.skinfold_abdominal_mm = b.skinfoldAbdominalMm;
+  if ("skinfoldThighMm" in b) o.skinfold_thigh_mm = b.skinfoldThighMm;
+  if ("chestCm" in b) o.chest_cm = b.chestCm;
+  if ("waistCm" in b) o.waist_cm = b.waistCm;
+  if ("abdomenCm" in b) o.abdomen_cm = b.abdomenCm;
+  if ("hipCm" in b) o.hip_cm = b.hipCm;
+  if ("rightArmCm" in b) o.right_arm_cm = b.rightArmCm;
+  if ("leftArmCm" in b) o.left_arm_cm = b.leftArmCm;
+  if ("rightThighCm" in b) o.right_thigh_cm = b.rightThighCm;
+  if ("leftThighCm" in b) o.left_thigh_cm = b.leftThighCm;
+  if ("rightCalfCm" in b) o.right_calf_cm = b.rightCalfCm;
+  if ("leftCalfCm" in b) o.left_calf_cm = b.leftCalfCm;
+  if ("notes" in b) o.notes = b.notes;
   return o;
 }
 

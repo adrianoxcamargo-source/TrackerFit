@@ -70,6 +70,31 @@ export interface BodyMetric {
   recordedAt: string; // yyyy-mm-dd
   weightKg: number;
   bodyfatPct?: number;
+  bioimpedanceBodyfatPct?: number;
+  bioimpedanceMusclePct?: number;
+  fatMassKg?: number;
+  leanMassKg?: number;
+  visceralFat?: number;
+  metabolicRateKcal?: number;
+  heightCm?: number;
+  skinfoldSubscapularMm?: number;
+  skinfoldTricepsMm?: number;
+  skinfoldChestMm?: number;
+  skinfoldAxillaryMm?: number;
+  skinfoldObliqueMm?: number;
+  skinfoldAbdominalMm?: number;
+  skinfoldThighMm?: number;
+  chestCm?: number;
+  waistCm?: number;
+  abdomenCm?: number;
+  hipCm?: number;
+  rightArmCm?: number;
+  leftArmCm?: number;
+  rightThighCm?: number;
+  leftThighCm?: number;
+  rightCalfCm?: number;
+  leftCalfCm?: number;
+  notes?: string;
 }
 
 export interface CardioLog {
